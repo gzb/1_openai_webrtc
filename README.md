@@ -32,13 +32,15 @@
 
 ### 4.login.html
 
-![image-20250114164404248](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20250114164404248.png)
+![image-20250114164404248](./images/image-20250114164404248.png)
+
+
 
 ### 5.logout.html
 
 ### 6.admin_pass.html 
 
-![image-20250114164622162](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20250114164622162.png)
+![image-20250114164622162](./images/image-20250114164622162.png)
 
 注：实际发布的时候，要将此文件改名。
 
@@ -46,6 +48,6 @@
 
 ### 7.chat_webrtc.html
 
-![image-20250114164733112](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20250114164733112.png)
+![image-20250114164733112](./images/image-20250114164733112.png)
 
 2025.01.14
