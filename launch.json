@@ -1,0 +1,23 @@
+{
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Launch get_openai_session.js",
+      "program": "${workspaceFolder}/${input:programPath}",
+      "envFile": "${workspaceFolder}/.env",
+      "runtimeArgs": [
+        "--trace-warnings"
+      ],
+      "console": "integratedTerminal"
+    }
+  ],
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "programPath",
+      "description": "Path to the program",
+      "default": "get_openai_session.js"
+    }
+  ]
+}

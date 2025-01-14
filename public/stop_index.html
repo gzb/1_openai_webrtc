@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenAI Session</title>
+  <style>
+    /* 样式控制 <audio> 元素 */
+    audio {
+      display: block;
+      margin: 20px auto;
+      width: 300px;
+      height: 30px;
+      background-color: #c22525;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>OpenAI Session</h1>
+  <audio></audio>
+  <script>
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      // 支持WebRTC
+      console.log('浏览器支持WebRTC');
+      document.writeln('浏览器支持WebRTC');
+    } else {
+      // 不支持WebRTC
+      document.writeln('浏览器不支持WebRTC');
+      throw new Error('浏览器不支持WebRTC');
+    }
+
+    async function init() {
+      try {
+        // 检查浏览器是否支持 getUserMedia
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("getUserMedia is not supported in this browser");
+        }
+
+        // Get an ephemeral key from your server - see server code below
+        const tokenResponse = await fetch("/session");
+        if (!tokenResponse.ok) throw new Error("Failed to fetch session token");
+        const data = await tokenResponse.json();
+        const EPHEMERAL_KEY = data.client_secret.value;
+
+        // Create a peer connection
+        const pc = new RTCPeerConnection();
+
+        // Set up to play remote audio from the model
+        const audioEl = document.querySelector('audio');
+        audioEl.autoplay = true;
+        pc.ontrack = e => {
+          console.log('Received remote stream');
+          audioEl.srcObject = e.streams[0];
+        };
+
+        // Add local audio track for microphone input in the browser
+        const ms = await navigator.mediaDevices.getUserMedia({
+          audio: true
+        });
+        pc.addTrack(ms.getTracks()[0]);
+
+        // Set up data channel for sending and receiving events
+        const dc = pc.createDataChannel("oai-events");
+        dc.addEventListener("message", (e) => {
+          // Realtime server events appear here!
+          console.log(e);
+        });
+
+        // Start the session using the Session Description Protocol (SDP)
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        const baseUrl = "https://api.openai.com/v1/realtime";
+        const model = "gpt-4o-realtime-preview-2024-12-17";
+        const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+          method: "POST",
+          body: offer.sdp,
+          headers: {
+            Authorization: `Bearer ${EPHEMERAL_KEY}`,
+            "Content-Type": "application/sdp"
+          },
+        });
+
+        if (!sdpResponse.ok) throw new Error("Failed to fetch SDP response");
+
+        const answer = {
+          type: "answer",
+          sdp: await sdpResponse.text(),
+        };
+        await pc.setRemoteDescription(answer);
+      } catch (error) {
+        console.error("Error during initialization:", error);
+        //alert(error.message); // 显示错误信息
+        document.writeln(error.message);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

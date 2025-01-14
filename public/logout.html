@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logout</title>
+</head>
+<body>
+  <h1>Logging out...</h1>
+  <div id="message" style="color: green;"></div>
+  <script>
+    // 删除 user_token cookie
+    document.cookie = 'user_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    
+    // 提示退出成功
+    const messageDiv = document.getElementById('message');
+    messageDiv.textContent = 'Logout successful';
+    
+    // 页面停留1秒后跳转到 login.html
+    setTimeout(() => {
+      window.location.href = 'login.html';
+    }, 1000);
+  </script>
+</body>
+</html>

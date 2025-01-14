@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenAI Chat WebRTC</title>
+  <style>
+    /* 样式控制 <audio> 元素 */
+    audio {
+      display: block;
+      margin: 20px auto;
+      width: 300px;
+      height: 30px;
+      background-color: #c22525;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    #messageDisplay {
+      width: 100%;
+      border: 1px solid black;
+      background-color: lightgray;
+      padding: 10px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>OpenAI Chat WebRTC</h1>
+  <div id="message" style="color: red;"></div>
+  <button id="startButton">开始实时语音对话</button>  
+  <div id="status">状态：</div>
+  <div id="elapsedTime">持续时间：</div>
+  <div id="remainingTime">剩余时间：</div>
+  <audio controls></audio>
+  <div id="messageDisplay"></div>
+
+<script>
+  let EPHEMERAL_KEY = ''; // 临时密钥
+  let intervalId;
+  let elapsedTime = 0;
+  let remainingTime = 300; // 5 minutes in seconds
+  let isChatting = false;
+  let pc; // Peer connection
+  //let localStream; // Local media stream
+  
+  // 检查用户是否登录
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+
+  const user_token = getCookie('user_token');
+  const messageDiv = document.getElementById('message');
+
+  const startButton = document.getElementById('startButton');
+  const statusDiv = document.getElementById('status');
+  const elapsedTimeDiv = document.getElementById('elapsedTime');
+  const remainingTimeDiv = document.getElementById('remainingTime');
+
+  if (!user_token) {
+      messageDiv.textContent = 'Please login first';
+      setTimeout(() => {
+        window.location.href = 'login.html';
+      }, 1000);
+  } else {
+    // 验证 user_token
+    fetch('/validate_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ user_token })
+    }).then(response => response.json()).then(result => {
+      if (!result.valid) {
+        messageDiv.textContent = 'Session expired. Please login again.';
+        setTimeout(() => {
+          window.location.href = 'login.html';
+        }, 1000);
+      }
+    });
+  }
+
+  // 检查浏览器是否支持 WebRTC
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    // 支持WebRTC
+    console.log('浏览器支持WebRTC');
+    messageDiv.textContent='浏览器支持WebRTC';
+  } else {
+    // 不支持WebRTC
+    document.writeln('浏览器不支持WebRTC');
+    messageDiv.textContent='浏览器不支持WebRTC';
+  }
+
+  async function init() {
+    try {
+        // 检查浏览器是否支持 getUserMedia
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("getUserMedia is not supported in this browser");
+        }
+
+        // Get an ephemeral key from your server - see server code below
+        const tokenResponse = await fetch("/session_by_token", {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ user_token })
+          });
+
+
+        if (!tokenResponse.ok) 
+        {
+          messageDiv.textContent = result.error;
+          setTimeout(() => {
+            window.location.href = 'login.html';
+          }, 1000);
+          throw new Error("Failed to fetch openai temp session token");
+        }
+
+        const data = await tokenResponse.json();
+        //const EPHEMERAL_KEY = data.client_secret.value;
+        EPHEMERAL_KEY = data.client_secret.value;
+
+        // Create a peer connectionreceived
+        //const pc = new RTCPeerConnection();
+        pc = new RTCPeerConnection();
+
+        // Set up to play remote audio from the model
+        const audioEl = document.querySelector('audio');
+        audioEl.autoplay = true;
+        pc.ontrack = e => {
+          console.log('Received remote stream');
+          audioEl.srcObject = e.streams[0];
+        };
+
+        // Add local audio track for microphone input in the browser
+        const ms = await navigator.mediaDevices.getUserMedia({
+          audio: true
+        });
+        pc.addTrack(ms.getTracks()[0]);
+
+        // Set up data channel for sending and receiving events
+        const dc = pc.createDataChannel("oai-events");
+        dc.addEventListener("message", (e) => {
+          // Realtime server events appear here!
+          console.log(e);
+          //document.getElementById('messageDisplay').innerText = e.data.response.status_details.error.message;
+          document.getElementById('messageDisplay').innerText= e.data;
+        });
+
+        //Gzb--添加-begin
+        dc.addEventListener("open", () => {
+          const event = {
+            type: "session.update",
+            session: {
+              instructions: "请用中文和我对话，你是一位心里大师，我是一位心理咨询师。请先向我说：你好。",
+            },
+          };
+          dc.send(JSON.stringify(event));
+          console.log('Data channel opened:session.update:请用中文和我对话，你是一位心里大师，我是一位心理咨询师');
+        });
+        //Gzb--添加-End
+
+        // Start the session using the Session Description Protocol (SDP)
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        const baseUrl = "https://api.openai.com/v1/realtime";
+        const model = "gpt-4o-realtime-preview-2024-12-17";
+        const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+          method: "POST",
+          body: offer.sdp,
+          headers: {
+            Authorization: `Bearer ${EPHEMERAL_KEY}`,
+            "Content-Type": "application/sdp"
+          },
+        });
+
+        if (!sdpResponse.ok) throw new Error("Failed to fetch SDP response");
+
+        const answer = {
+          type: "answer",
+          sdp: await sdpResponse.text(),
+        };
+        await pc.setRemoteDescription(answer);
+
+        // Start the timer每55秒更新一次临时密钥
+        // Update elapsed time and remaining time every second
+        intervalId = setInterval(() => {
+          elapsedTime++;
+          remainingTime--;
+          elapsedTimeDiv.textContent = `Elapsed Time: ${elapsedTime} seconds`;
+          remainingTimeDiv.textContent = `Remaining Time: ${remainingTime} seconds`;
+
+          // Request new session token every 55 seconds
+          if (elapsedTime % 55 === 0 && remainingTime > 0) {
+            fetch('/session_by_token', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ user_token })
+            }).then(response => response.json()).then(result => {
+              if (result.error) {
+                messageDiv.textContent = result.error;
+              } else {
+                EPHEMERAL_KEY = result.client_secret.value;
+                console.log('Updated ephemeral key:', EPHEMERAL_KEY); // Log the updated key
+              }
+            }).catch(error => {
+              messageDiv.textContent = 'An error occurred';
+              console.error(error);
+            });
+          }
+
+          // Stop the session after 5 minutes
+          if (remainingTime <= 0) {
+            stopChat();
+          }
+        }, 1000);
+
+    } catch (error) {
+        console.error("Error during initialization:", error);
+        //alert(error.message); // 显示错误信息
+        //document.writeln(error.message);
+        messageDiv.textContent = error.message;
+    }
+  }
+
+  //init();
+  function stopChat() {
+      clearInterval(intervalId);
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      isChatting = false;
+      startButton.textContent = '开始实时语音对话';
+      statusDiv.textContent = '';
+      elapsedTime = 0;
+      remainingTime = 300;
+      //location.reload(); // 刷新当前页面
+   
+    }
+
+    startButton.addEventListener('click', () => {
+      if (isChatting) {
+        stopChat();
+      } else {
+        isChatting = true;
+        startButton.textContent = '对话中';
+        statusDiv.textContent = '对话开始';
+        init();
+      }
+    });
+
+    //document.getElementById('stopButton').addEventListener('click', stopChat);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f0f0f0;
+      margin: 0;
+    }
+    .login-container {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 400px;
+    }
+    .login-container h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .login-container input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    .login-container button {
+      width: 100%;
+      padding: 10px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .login-container button:hover {
+      background-color: #0056b3;
+    }
+    .error-message {
+      color: red;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <h1>Login</h1>
+    <input type="text" id="user_name" placeholder="Username">
+    <input type="password" id="user_pass" placeholder="Password">
+    <button onclick="login()">Login</button>
+    <div class="error-message" id="error-message"></div>
+  </div>
+  <script>
+    async function login() {
+      const user_name = document.getElementById('user_name').value;
+      const user_pass = document.getElementById('user_pass').value;
+      const response = await fetch('/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ user_name, user_pass })
+      });
+      const result = await response.json();
+      if (result.success) {
+        document.cookie = `user_token=${result.user_token}; path=/`;
+        window.location.href = 'chat_webrtc.html';
+      } else {
+        document.getElementById('error-message').innerText = 'Invalid username or password';
+      }
+    }
+  </script>
+</body>
+</html>
